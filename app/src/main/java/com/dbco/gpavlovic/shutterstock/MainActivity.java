@@ -1,27 +1,31 @@
 package com.dbco.gpavlovic.shutterstock;
 
 import android.os.Bundle;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
-import android.util.Base64;
-import android.view.View;
+import android.support.v7.widget.GridLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.text.format.DateFormat;
 import android.view.Menu;
 import android.view.MenuItem;
 
-import com.squareup.okhttp.Interceptor;
-import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
+import com.dbco.gpavlovic.shutterstock.com.dbco.gpavlovic.shutterstock.shutterstock.ShutterImageInfo;
+import com.dbco.gpavlovic.shutterstock.com.dbco.gpavlovic.shutterstock.shutterstock.ShutterResponse;
+import com.dbco.gpavlovic.shutterstock.com.dbco.gpavlovic.shutterstock.shutterstock.ShutterStock;
+import com.dbco.gpavlovic.shutterstock.com.dbco.gpavlovic.shutterstock.shutterstock.ShutterStockService;
 
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
 
-import retrofit.GsonConverterFactory;
+import retrofit.Call;
+import retrofit.Callback;
+import retrofit.Response;
 import retrofit.Retrofit;
 
 public class MainActivity extends AppCompatActivity
 {
+    private List<ShutterImageInfo> mImageList;
+    private ShutterResponseAdapter mAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -29,27 +33,43 @@ public class MainActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Interceptor interceptor = new Interceptor()
+        // Setup the view
+        RecyclerView imageGrid = (RecyclerView) findViewById(R.id.image_grid);
+
+        imageGrid.setLayoutManager(new GridLayoutManager(this, 3));
+        mImageList = new ArrayList<ShutterImageInfo>();
+        mAdapter = new ShutterResponseAdapter(this, mImageList);
+        //mAdapter.setOnItemClockListener();
+        imageGrid.setAdapter(mAdapter);
+
+        // Make HTTP request for images
+        ShutterStockService shutterStockService = ShutterStock.getServiceInstance();
+
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DATE, -5);
+        String formattedDate = (String) DateFormat.format("yyyy-MM-dd", cal);
+        Call<ShutterResponse> getRecentImages = shutterStockService.recentImages(formattedDate);
+        getRecentImages.enqueue(new Callback<ShutterResponse>()
         {
             @Override
-            public Response intercept(Chain chain) throws IOException
+            public void onResponse(Response<ShutterResponse> response, Retrofit retrofit)
             {
-                String authInfo = "4264b14b4f93aba504fa:25428315aa2d4ed9c5e45a516f8c8ecc0e2b4cca";
-                String authString = "Basic " + Base64.encodeToString(authInfo.getBytes(), Base64.NO_WRAP);
-
-                Request newRequest = chain.request().newBuilder().addHeader("Authorization", authString).build();
-                return chain.proceed(newRequest);
+                updateImages(response);
             }
-        };
 
-        OkHttpClient client = new OkHttpClient();
-        client.interceptors().add(interceptor);
+            @Override
+            public void onFailure(Throwable t)
+            {
 
-        new Retrofit.Builder()
-                .baseUrl("https://api.shutterstock.com/v2")
-                .addConverterFactory(GsonConverterFactory.create())
-                .client(client)
-                .build();
+            }
+        });
+    }
+
+    private void updateImages(retrofit.Response<ShutterResponse> response)
+    {
+        mImageList.clear();
+        mImageList.addAll(response.body().getImageInfo());
+        mAdapter.notifyDataSetChanged();
     }
 
     @Override
